@@ -1,4 +1,4 @@
 .DS_Store
-outputfiles/*
+outputfiles/./*
 .idea
 __pycache__
