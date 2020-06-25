@@ -62,8 +62,7 @@ This application also allows you to use other input files and MapReduce modules.
 
 
 ## Architecture
-
-	![image](./documents/images/class-diagram.jpeg)
+<img title='class-diagram.jpeg' src='documents/images/class-diagram.jpeg' width="100%">
 
 - The MapReduce prototype consists of the classes shown above in the diagram. I am going to describe the general functionality and reasons for the architectural decisions in this section. Due to the page limit, please refer to the code for the specific implementation of each function.
 
