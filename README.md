@@ -9,7 +9,7 @@ CSMCC16-19-0V
 
 # 動作確認の方法
 1. リポジトリをクローンする
-2. Python3環境で、"python Adoop-dev.py"を実行する。
+2. Python3環境で、"python Adoop-dev.py"を実行する。* 起動しない場合は、 "python Adoop-dev.py"
 3. 以下のコマンドを入力
   ```
   CLEAN AComp_Passenger_data.csv
