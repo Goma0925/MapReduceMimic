@@ -8,9 +8,20 @@ CSMCC16-19-0V
 *PythonのThreadライブラリは単一Threadで走るため、実際に並列処理化するには別のライブラリの使用が必要です。
 
 # 動作確認の方法
+*Python3.6環境が必要
+
+起動手順
 1. リポジトリをクローンする
-2. Python3環境で、"python Adoop-dev.py"を実行する。* 起動しない場合は、 "python Adoop-dev.py"
-3. 以下のコマンドを入力
+2. プロジェクトのディレクトリに移動 
+	cd <ダウンロードしたリポジトリへのpathでディレクトリに移動>
+3. Python virtual environmentを利用して、プロジェクトの仮想環境を利用する
+	source .venv/bin/activate
+4. Python3環境で、スクリプトを実行する。
+	python Adoop-dev.py
+* 起動しない場合は、 
+	python3 Adoop-dev.py
+5. コマンド入力モードが起動。
+6. 以下のコマンドを入力
   ```
   CLEAN AComp_Passenger_data.csv
   ```
