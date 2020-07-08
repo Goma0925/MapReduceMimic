@@ -13,13 +13,21 @@ CSMCC16-19-0V
 起動手順
 1. リポジトリをクローンする
 2. プロジェクトのディレクトリに移動 
+  ```
 	cd <ダウンロードしたリポジトリへのpathでディレクトリに移動>
+  ```
 3. Python virtual environmentを利用して、プロジェクトの仮想環境を利用する
+  ```
 	source .venv/bin/activate
+  ```
 4. Python3環境で、スクリプトを実行する。
+  ```
 	python Adoop-dev.py
+  ```
 * 起動しない場合は、 
+  ```
 	python3 Adoop-dev.py
+  ```
 5. コマンド入力モードが起動。
 6. 以下のコマンドを入力
   ```
@@ -48,6 +56,8 @@ CSMCC16-19-0V
   ```
   - → AComp_Passenger_data_CLEANED.csv Top30_airports_LatLong.csvをインプットとして、classes/mapreduce_mods/(4)HighestMileage.py内に書かれているMapperとReducerで処理する。このモジュールは、各フライトの飛行距離を計算して、その結果を利用して、各乗客(passenger)の総飛行距離を出力する。アウトプットファイルは、outputfilesディレクトリに出力される。
 
+
+*以下英語のレポート・デザインドキュメント
 # MapReduce Prototyping
 
 Source code: https://github.com/Goma0925/MapReduceMimic
