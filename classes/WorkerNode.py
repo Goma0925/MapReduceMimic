@@ -4,6 +4,9 @@ from classes.abstract_classes import AbstractReducer as ReducerClass
 from classes.ModuleImporter import *
 
 class WorkerNode:
+    """
+        このクラスは、MapperとReducerクラスを使って、MappとReduceを実行します。
+    """
     def __init__(self):
         self.assigned_lines_to_map = [] # This is a job for this worker to map
         self.assigned_key_to_reduce = ""

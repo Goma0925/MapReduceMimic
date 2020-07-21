@@ -7,6 +7,10 @@ from classes.Job import Job
 from classes import Commands
 
 class CLI(AbstractUserInterface):
+    """
+        This class defines the behavior of the command line interface.
+        コマンドラインインターフェイスの挙動を定義するクラスです。
+    """
     def accept_command(self):
         is_valid_input = False
         input_args = []

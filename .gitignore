@@ -1,3 +1,7 @@
 .DS_Store
 .idea
 __pycache__
+PlayGround/*
+./classes/errorhandling/testrun_cleaner.py
+./dist/*
+./build/*

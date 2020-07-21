@@ -1,11 +1,9 @@
 import os
 import importlib.machinery
-import ntpath
 from threading import Thread
 import math
 from copy import deepcopy
 import sys
-from shutil import copyfile
 
 from classes import Commands
 from classes.Context import Context
@@ -18,9 +16,10 @@ from classes.abstract_classes.AbstractJobRunner import AbstractJobRunner
 class MasterNode:
     def __init__(self, interface: AbstractUserInterface, is_production: bool):
         #Command line interface to deal with the interface input.
+        #（コマンドライン）インターフェイスからユーザーのI/Oを取得してくるインターフェイスクラス
         self.interface = interface
 
-        #File storages
+        #File storages/ ファイル保存パス設定
         if is_production:
             # For production
             self.maindir = os.path.dirname(sys.argv[0])
@@ -39,27 +38,36 @@ class MasterNode:
             self.jobrunner_file_dir = os.path.join(self.maindir, "./mapreduce_mods")
             self.data_loader_error_log_dir = os.path.join(self.maindir, "../dataloader_error_log")
 
-        #User map reduce
+        #User map reduce/ ユーザーがアップロードするMapper & Reducer設定を取得するJobRunnerクラス
         self.worker_num = 3
         self.jobrunner_file_name = os.path.join(self.jobrunner_file_dir, "")
         self.jobrunner = None
         self.jobrunner_file_name = ""
 
-        #Which mapper will take which file/
-        self.mapper_and_inputdata_pairs = []
-        self.reducer_and_outputpath_pairs = []
+        #Which mapper/reducer will take which file
+        self.mapper_and_inputdata_pairs = [] #どのMapperとinputfileが対応するかをメモリに保存。この情報はJobRunnerから取得
+        self.reducer_and_outputpath_pairs = [] #どのReducerとoutputfileが対応するかをメモリに保存。この情報はJobRunnerから取得
 
-        #Data loader
+        #Data loader/ データをロードするためのCSVLoaderクラス。他のファイルを読み込むLoaderクラスに変更可能。
+        #DataFilterはLoaderクラスがどのようにファイル内の各行を読み込むかを決定する。
         self.data_loader = CSVDataLoader(DataFilter())
 
 
     def _clean_input_data(self, input_file_name):
+        """
+        :param input_file_name: 処理を行う入力ファイルの名前。inputfilesディレクトリ内にこのファイルがあると、処理が開始される。
+        :void: CSVDataLoaderを使って、データを読み込み、DataFilterクラスの設定に沿ってデータを再フォーマット、保存する。
+        """
         self.data_loader.set_error_log_dir_path(self.data_loader_error_log_dir)
         self.data_loader.set_clean_data_dir_path(self.input_file_dir)
         input_file_path = os.path.join(self.input_file_dir, input_file_name)
         self.data_loader.clean_data(input_file_path)
 
     def _load_data(self, input_file_path) -> list:
+        """
+        :param input_file_path: 入力ファイルのPath
+        :return: データを読み込み、各行が入った配列で返す。
+        """
         data_arr = []
         with open(input_file_path, "r") as file:
             line = file.readline()
@@ -69,6 +77,10 @@ class MasterNode:
         return data_arr
 
     def _load_jobrunner_module(self, module_name) -> AbstractJobRunner:
+        """
+        :param module_name: ユーザが実装したMapper, Reducer, JobRunnerを含むファイルの名前。ファイル名はインターフェイスクラスから取得する。
+        :return: JobRunnerクラスのインスタンスを返す。JobRunnerクラスは、使用するMapperクラスとReducerクラス、そしてそのそれぞれに対応する入力ファイルと出力ファイルの名前を記録している。
+        """
         module_path = os.path.join(self.jobrunner_file_dir, module_name)
 
         jobrunner_mod = importlib.machinery.SourceFileLoader(module_name, module_path).load_module()
@@ -82,6 +94,11 @@ class MasterNode:
         return jobrunner_instance
 
     def _save_final_result(self, reduce_contexts: list, output_path):
+        """
+        :param reduce_contexts: Contextインスタンスの配列。
+        :param output_path: 結果の出力先のファイルパス
+        :return: Contextsクラスに記録されているKey/Valueペアのデータを指定のファイルに保存する。
+        """
         result = ""
         for reduce_context in reduce_contexts:
             for pair in reduce_context.get_key_val_pairs():
@@ -90,13 +107,14 @@ class MasterNode:
                 result += str(key) + ":" + str(val) + "\n"
         with open(output_path, "w") as file:
             file.write(result)
-
         self.interface.display_output_save_message(output_path)
 
-    def split_input_arr(self, input_arr: list):
+    def _split_input_arr(self, input_arr: list):
         """
         :param data_arr: An array that contains all the lines from input data.
-        :return: An array of tuples, each of which contains work
+                        入力ファイルの各行が全て保存された配列。
+        :return: An array of lists(2D list), each of which contains a work chunk
+                2D配列。それぞれの要素の配列は各WorkerNodeに割り当てるWorkChunkのインプットを保存する。
         """
         chunk_size = math.ceil(len(input_arr) / self.worker_num)
         work_chunks = []
@@ -111,35 +129,38 @@ class MasterNode:
     def _wait_until_all_threads_finish(self, all_threads: list):
         """
         :param all_threads:
-        :void: Stop process until all the threads in the list finish.
+        :void: Stop process until all the threads in the list finish/スレッドが処理終了するまで待つ。
         """
         for thread in all_threads:
             thread.join()
 
 
     def _run_mapreduce(self):
-        # Array to keep track of all the worker instances
+        """
+        :void: MapReduceのMap、Shuffle&Sort、Reduceフェイズを実行する。
+        """
+        # Array to keep track of all the worker instances・すべてのWorkNodeインスタンスを作成。保存する。
         workers = []
         for worker_index in range(self.worker_num):
             worker = WorkerNode()
             workers.append(worker)
 
-        # Map
-
+        # ---Map・マッピングフェイズ---
         # An array to keep track of the contexts to store map results.
         result_map_contexts = []
 
         # Execute the mapping process for "each mapper class & input data pair" by allocating the work for
         #  mutiple WorkerNodes.
+        # Mapperと”そのMapperに対応する入力ファイルの各行"を読み込んだ配列ペアをループして、全てのMapプロセスを実行する。
         for pair in self.mapper_and_inputdata_pairs:
             # Get a mapper class
             mapper_class = pair["mapper_class"]
 
-            # Get all the entire input data that is to be processed with the mapper class above
+            # Get all the input data that is to be processed with the mapper class above
             input_arr = pair["inputdata"]
 
             # Split the work by the number of workers.
-            work_chunks = self.split_input_arr(input_arr)
+            work_chunks = self._split_input_arr(input_arr)
 
             # Set each worker the mapper class, allocate them a work_chunk, and start the thread.
             self.interface.display_mapping_start(mapper_class)
@@ -233,50 +254,58 @@ class MasterNode:
 
 
     """The code bellow is the fisrt sigle threaded prototype"""
-    # def _run_single_threaded_mapreduce(self):
-    #     # Mapping phase
-    #     map_contexts = []
-    #     for pair in self.mapper_and_inputdata_pairs:
-    #         map_context = Context()
-    #         mapper_class = pair["mapper_class"]
-    #         mapper_class = mapper_class()
-    #         data_arr = pair["inputdata"]
-    #         for i in range(len(data_arr)):
-    #             line = data_arr[i]
-    #             mapper_class.map(str(i), line, map_context)
-    #         map_contexts.append(map_context)
-    #
-    #     # Shuffling phase
-    #     shuffled_key_vals_pairs = {} #{key:[val, val,]}
-    #     for map_context in map_contexts:
-    #         for pair in map_context.get_key_val_pairs():
-    #             key = pair[0]
-    #             val = pair[1]
-    #             if key not in shuffled_key_vals_pairs:
-    #                 shuffled_key_vals_pairs[key] = []
-    #             shuffled_key_vals_pairs[key].append(val)
-    #
-    #     # Sorting phase
-    #     sorted_key_vals_pairs = {}
-    #     for key in shuffled_key_vals_pairs:
-    #         sorted_key_vals_pairs[key] = sorted(shuffled_key_vals_pairs[key])
-    #
-    #     # Reducing phase
-    #     for pair in self.reducer_and_outputpath_pairs:
-    #         reduce_context = Context()
-    #         outputfile_name = pair["output_path"]
-    #         reducer_class = pair["reducer_class"]
-    #         reducer = reducer_class()
-    #
-    #         for key in sorted_key_vals_pairs:
-    #             sorted_values = sorted_key_vals_pairs[key]
-    #             reducer.reduce(key, sorted_values, reduce_context)
-    #         self._save_final_result(reduce_context, outputfile_name)
-    #
-    #
+    def _run_single_threaded_mapreduce(self):
+        """
+        :void: MapReduceを単一スレッドで実行する。_run_mapreduce関数のプロトタイプ。現在は使用していない.
+        """
+        # Mapping phase
+        map_contexts = []
+        for pair in self.mapper_and_inputdata_pairs:
+            map_context = Context()
+            mapper_class = pair["mapper_class"]
+            mapper_class = mapper_class()
+            data_arr = pair["inputdata"]
+            for i in range(len(data_arr)):
+                line = data_arr[i]
+                mapper_class.map(str(i), line, map_context)
+            map_contexts.append(map_context)
+
+        # Shuffling phase
+        shuffled_key_vals_pairs = {} #{key:[val, val,]}
+        for map_context in map_contexts:
+            for pair in map_context.get_key_val_pairs():
+                key = pair[0]
+                val = pair[1]
+                if key not in shuffled_key_vals_pairs:
+                    shuffled_key_vals_pairs[key] = []
+                shuffled_key_vals_pairs[key].append(val)
+
+        # Sorting phase
+        sorted_key_vals_pairs = {}
+        for key in shuffled_key_vals_pairs:
+            sorted_key_vals_pairs[key] = sorted(shuffled_key_vals_pairs[key])
+
+        # Reducing phase
+        for pair in self.reducer_and_outputpath_pairs:
+            reduce_context = Context()
+            reduce_contexts = [reduce_context]
+            outputfile_name = pair["output_path"]
+            reducer_class = pair["reducer_class"]
+            reducer = reducer_class()
+
+            for key in sorted_key_vals_pairs:
+                sorted_values = sorted_key_vals_pairs[key]
+                reducer.reduce(key, sorted_values, reduce_context)
+            self._save_final_result(reduce_contexts, outputfile_name)
+
+
 
 
     def start(self):
+        """
+        :void:プロセスを起動する。ユーザーインターフェイスから、使用するインプットファイル、アウトプットファイルを取得。
+            ユーザーが指定したJonRunnerから、MapperクラスとReducerクラスも取得、このMainWorkerインスタンスのインスタンス変数に格納し、MapReduceを起動する。
+        """
         self.interface.display_activation()
         self.interface.display_thematic_break()
         data_filter = DataFilter()
@@ -284,18 +313,24 @@ class MasterNode:
 
         is_done = False
         while not is_done:
+            #　インターフェイスからコマンドと、RUNコマンドであれば、jobrunnerファイルを取得する。
             command_obj = self.interface.accept_command()
             command = command_obj["command"]
             jobrunner_file_name = command_obj["jobrunner_file_name"]
             command_args = command_obj["args"]
             self.jobrunner_file_name = jobrunner_file_name
             if command == Commands.run:
+                # RUNコマンドであれば、MapReduceを実行する。
+                # JobRunnerクラスを取得
                 self.jobrunner = self._load_jobrunner_module(jobrunner_file_name)
+                # jobrunner.run()はJob Queueを取得する。
                 self.jobrunner.run(command_args, self.tempo_buffer_file_path)
                 job_queue = self.jobrunner.get_job_queue()
 
                 self.interface.display_job_queue(job_queue)
                 self.interface.display_thematic_break()
+
+                #各Jobを実行する。Execute each job.
                 for job in job_queue:
                     self.interface.display_job(job)
 
